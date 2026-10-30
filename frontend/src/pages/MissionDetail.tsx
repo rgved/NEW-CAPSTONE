@@ -132,21 +132,6 @@ export default function MissionDetail() {
     );
   }
 
-  const getSeverityStyle = (sev: string) => {
-    switch (sev.toLowerCase()) {
-      case "critical":
-        return { bg: "bg-[#DC2626]/10", border: "border-[#DC2626]/30", text: "text-[#DC2626]" };
-      case "high":
-        return { bg: "bg-[#EF4444]/10", border: "border-[#EF4444]/30", text: "text-[#EF4444]" };
-      case "medium":
-        return { bg: "bg-[#F59E0B]/10", border: "border-[#F59E0B]/30", text: "text-[#F59E0B]" };
-      case "low":
-        return { bg: "bg-[#EAB308]/10", border: "border-[#EAB308]/30", text: "text-[#EAB308]" };
-      default:
-        return { bg: "bg-[#38BDF8]/10", border: "border-[#38BDF8]/30", text: "text-[#38BDF8]" };
-    }
-  };
-
   return (
     <div className="space-y-8 animate-fadeIn">
       {/* Header navigation bar */}
@@ -413,14 +398,14 @@ export default function MissionDetail() {
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full border border-black ${
                       t.status === "completed" ? "bg-[#10B981]" :
-                      t.status === "failed" ? "bg-[#EF4444]" : t.status === "unavailable" ? "bg-[#64748B]" : "bg-[#F59E0B] animate-pulse"
+                      t.status === "failed" ? "bg-[#EF4444]" : (t.status as string) === "unavailable" ? "bg-[#64748B]" : "bg-[#F59E0B] animate-pulse"
                     }`}></div>
                     <span className="text-xs font-mono font-bold text-[#F8FAFC]">{getTaskLabel(t.task)}</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#000000] ${
                       t.status === "completed" ? "text-black bg-[#10B981]" :
-                      t.status === "failed" ? "text-white bg-[#EF4444]" : t.status === "unavailable" ? "text-white bg-[#64748B]" : "text-black bg-[#F59E0B]"
+                      t.status === "failed" ? "text-white bg-[#EF4444]" : (t.status as string) === "unavailable" ? "text-white bg-[#64748B]" : "text-black bg-[#F59E0B]"
                     }`}>{t.status}</span>
                     <span className="text-[10px] font-mono text-[#94A3B8]">
                       {new Date(t.timestamp).toLocaleTimeString()}
