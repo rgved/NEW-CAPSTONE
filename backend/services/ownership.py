@@ -288,7 +288,7 @@ def get_strong_user(authorization):
     conn = _conn()
     try:
         row = conn.execute(
-            "SELECT username, auth_provider FROM users WHERE id = ?", (user.get("user_id"),)
+            "SELECT username, auth_provider, google_verified FROM users WHERE id = ?", (user.get("user_id"),)
         ).fetchone()
     except Exception:
         row = None
@@ -297,6 +297,10 @@ def get_strong_user(authorization):
     if not row:
         return None, "AUTH_REQUIRED"
     provider = row["auth_provider"] if "auth_provider" in row.keys() else "local"
-    if provider != "local":
+    if provider == "google":
+        verified = row["google_verified"] if "google_verified" in row.keys() else 0
+        if not verified:
+            return None, "AUTH_WEAK_IDENTITY"
+    elif provider != "local":
         return None, "AUTH_WEAK_IDENTITY"
     return {"user_id": user.get("user_id"), "username": row["username"]}, None
