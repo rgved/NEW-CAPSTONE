@@ -53,7 +53,6 @@ export default function AuthModal() {
 
   const handleGoogleClick = () => {
     setError(null);
-    const effectiveClientId = googleClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
 
     if (window.google?.accounts?.id && googleClientId) {
       try {
