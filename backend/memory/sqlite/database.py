@@ -139,6 +139,8 @@ def init_db(db_path: Optional[str] = None) -> None:
         _ensure_column(cursor, "users", "auth_provider", "TEXT NOT NULL DEFAULT 'local'")
         _ensure_column(cursor, "users", "avatar_url", "TEXT")
         _ensure_column(cursor, "users", "google_id", "TEXT")
+        _ensure_column(cursor, "users", "google_verified", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(cursor, "users", "tokens_invalidated_before", "REAL NOT NULL DEFAULT 0")
         cursor.execute(_CREATE_MISSIONS)
         _ensure_column(cursor, "missions", "mission_id", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(cursor, "missions", "target_url", "TEXT NOT NULL DEFAULT ''")
