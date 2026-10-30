@@ -14,6 +14,8 @@ import re
 
 from backend.config import GOOGLE_CLIENT_ID
 from backend.memory.sqlite.database import get_connection
+import sqlite3
+from backend.services.google_verify import GoogleVerificationError, verify_google_credential
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,7 @@ def _generate_token(user_id: int, username: str, email: str) -> str:
         "user_id": user_id,
         "username": username,
         "email": email,
+        "iat": time.time(),
         "exp": int(time.time()) + 86400 * 7  # 7 days
     }
     raw_payload = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode()
@@ -61,6 +64,20 @@ def verify_token(token: str) -> Optional[dict]:
         payload = json.loads(base64.urlsafe_b64decode(raw_payload.encode()).decode())
         if payload.get("exp", 0) < int(time.time()):
             return None
+        # session invalidation: reject tokens issued before an account security reset
+        try:
+            conn = get_connection()
+            try:
+                row = conn.execute("SELECT tokens_invalidated_before FROM users WHERE id = ?", (payload.get("user_id"),)).fetchone()
+            finally:
+                conn.close()
+        except sqlite3.OperationalError:
+            row = None  # tokens_invalidated_before not migrated yet
+        if row:
+            tib = row["tokens_invalidated_before"] if "tokens_invalidated_before" in row.keys() else 0
+            issued = payload.get("iat") or (payload.get("exp", 0) - 86400 * 7)
+            if tib and issued < tib:
+                return None
         return payload
     except Exception as e:
         logger.debug("Token verification error: %s", e)
@@ -211,33 +228,6 @@ def login(payload: LoginRequest):
         conn.close()
 
 
-def _decode_google_jwt(credential: str) -> dict:
-    """Safely decode the JSON payload of a Google JWT, verifying with Google tokeninfo if reachable."""
-    try:
-        import urllib.request
-        req = urllib.request.Request(f"https://oauth2.googleapis.com/tokeninfo?id_token={credential}")
-        with urllib.request.urlopen(req, timeout=3) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            if "email" in data:
-                return data
-    except Exception:
-        pass
-
-    try:
-        parts = credential.split(".")
-        if len(parts) != 3:
-            return {}
-        payload_b64 = parts[1]
-        padding = 4 - (len(payload_b64) % 4)
-        if padding != 4:
-            payload_b64 += "=" * padding
-        decoded = base64.urlsafe_b64decode(payload_b64).decode("utf-8")
-        return json.loads(decoded)
-    except Exception as e:
-        logger.warning("Failed to decode Google credential token: %s", e)
-        return {}
-
-
 @router.get("/google/config")
 def google_config():
     """Return public Google OAuth client configuration."""
@@ -257,45 +247,67 @@ def google_config():
 
 @router.post("/google", response_model=AuthResponse)
 def google_auth(payload: GoogleAuthRequest):
-    email = payload.email
-    name = payload.name
-    google_id = payload.google_id
-    avatar_url = payload.avatar_url
-
-    # If a Google credential JWT was provided, extract user details from it
-    if payload.credential:
-        decoded = _decode_google_jwt(payload.credential)
-        if decoded:
-            email = decoded.get("email") or email
-            name = decoded.get("name") or name
-            google_id = decoded.get("sub") or google_id
-            avatar_url = decoded.get("picture") or avatar_url
-
-    if not email or "@" not in email:
+    # Only a Google-issued ID token verified server-side may establish identity.
+    # Client-supplied email/name/google_id/avatar are never accepted.
+    if not payload.credential:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A valid Google email is required."
+            detail={"code": "GOOGLE_CREDENTIAL_REQUIRED",
+                    "message": "Google sign-in requires the Google credential token."},
         )
+    try:
+        claims = verify_google_credential(payload.credential)
+    except GoogleVerificationError as e:
+        http_status = (status.HTTP_503_SERVICE_UNAVAILABLE
+                       if e.code == "GOOGLE_VERIFICATION_UNAVAILABLE"
+                       else status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status_code=http_status,
+                            detail={"code": e.code, "message": e.message})
 
-    email = email.strip().lower()
+    email = claims["email"].strip().lower()
+    name = claims.get("name") or None
+    google_id = claims["sub"]
+    avatar_url = claims.get("picture") or None
 
     conn = get_connection()
     try:
         cursor = conn.cursor()
-        # Check if user already exists with this email
-        cursor.execute("SELECT id, username, email, avatar_url, google_id, created_at FROM users WHERE email = ?", (email,))
+        cursor.execute(
+            "SELECT id, username, email, avatar_url, google_id, auth_provider, google_verified, created_at FROM users WHERE email = ?",
+            (email,))
         user = cursor.fetchone()
 
         if user:
+            provider = user["auth_provider"] if "auth_provider" in user.keys() else "local"
+            if provider != "google":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={"code": "GOOGLE_LINK_REQUIRES_PASSWORD",
+                            "message": "This email belongs to a password account. Sign in with your password instead."},
+                )
             user_id = user["id"]
             username = user["username"]
             created_at = user["created_at"]
-            if (not user["google_id"] and google_id) or (not user["avatar_url"] and avatar_url):
+            was_verified = user["google_verified"] if "google_verified" in user.keys() else 0
+            if was_verified:
+                # Already verified by the server-verified flow: plain refresh.
                 cursor.execute(
-                    "UPDATE users SET google_id = COALESCE(google_id, ?), avatar_url = COALESCE(avatar_url, ?) WHERE id = ?",
-                    (google_id, avatar_url, user_id)
-                )
-                conn.commit()
+                    "UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?) WHERE id = ?",
+                    (google_id, avatar_url, user_id))
+            else:
+                # First verified login for a pre-verification Google row. The old
+                # endpoint accepted client-supplied email/google_id, so nothing on
+                # this row is trustworthy - not even a matching subject. Rebind
+                # the subject, invalidate every prior session, revoke grants.
+                now_ts = time.time()
+                cursor.execute(
+                    "UPDATE users SET google_id = ?, avatar_url = COALESCE(avatar_url, ?), google_verified = 1, tokens_invalidated_before = ? WHERE id = ?",
+                    (google_id, avatar_url, now_ts, user_id))
+                try:
+                    cursor.execute("DELETE FROM verified_targets WHERE username = ?", (username,))
+                except sqlite3.OperationalError:
+                    pass  # grants table not created yet
+            conn.commit()
         else:
             base_username = ""
             if name:
@@ -317,11 +329,10 @@ def google_auth(payload: GoogleAuthRequest):
 
             cursor.execute(
                 """
-                INSERT INTO users (username, email, password_hash, salt, auth_provider, avatar_url, google_id, created_at)
-                VALUES (?, ?, ?, ?, 'google', ?, ?, ?)
+                INSERT INTO users (username, email, password_hash, salt, auth_provider, avatar_url, google_id, google_verified, created_at)
+                VALUES (?, ?, ?, ?, 'google', ?, ?, 1, ?)
                 """,
-                (username, email, dummy_hash, salt, avatar_url, google_id, created_at)
-            )
+                (username, email, dummy_hash, salt, avatar_url, google_id, created_at))
             conn.commit()
             user_id = cursor.lastrowid
 
@@ -339,6 +350,7 @@ def google_auth(payload: GoogleAuthRequest):
         }
     finally:
         conn.close()
+
 
 
 @router.get("/me")
