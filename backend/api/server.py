@@ -9,6 +9,7 @@ from backend.api.routes.findings import router as findings_router
 from backend.api.routes.reports import router as reports_router
 from backend.api.routes.metrics import router as metrics_router
 from backend.api.routes.memory import router as memory_router
+from backend.api.routes.ownership import router as ownership_router
 from backend.api.routes.auth import router as auth_router
 
 app = FastAPI(
@@ -39,6 +40,7 @@ app.include_router(findings_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(metrics_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
+app.include_router(ownership_router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn

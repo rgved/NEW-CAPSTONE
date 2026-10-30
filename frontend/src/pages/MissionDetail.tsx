@@ -42,6 +42,25 @@ const getOwaspCategory = (category?: string): { code: string; name: string } => 
   }
 };
 
+const getTaskLabel = (task: string): string => {
+  switch (task) {
+    case "RUN_RECON":
+      return "RECON AGENT";
+    case "EXTRACT_FEATURES":
+      return "FEATURE EXTRACTION AGENT";
+    case "RUN_EFFICIENT_FETCH":
+      return "EFFICIENT FETCH WORKER";
+    case "RUN_ANALYSIS":
+      return "ANALYSIS AGENT (LLM)";
+    case "RUN_SEVERITY_MODEL":
+      return "SEVERITY MODEL (ML)";
+    case "GENERATE_REPORT":
+      return "REPORT AGENT";
+    default:
+      return task;
+  }
+};
+
 const getCapabilityLabel = (name: string): string => {
   switch (name.toLowerCase()) {
     case "unknown":
@@ -394,14 +413,14 @@ export default function MissionDetail() {
                   <div className="flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full border border-black ${
                       t.status === "completed" ? "bg-[#10B981]" :
-                      t.status === "failed" ? "bg-[#EF4444]" : "bg-[#F59E0B] animate-pulse"
+                      t.status === "failed" ? "bg-[#EF4444]" : t.status === "unavailable" ? "bg-[#64748B]" : "bg-[#F59E0B] animate-pulse"
                     }`}></div>
-                    <span className="text-xs font-mono font-bold text-[#F8FAFC]">{t.task}</span>
+                    <span className="text-xs font-mono font-bold text-[#F8FAFC]">{getTaskLabel(t.task)}</span>
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border border-black shadow-[1px_1px_0px_#000000] ${
                       t.status === "completed" ? "text-black bg-[#10B981]" :
-                      t.status === "failed" ? "text-white bg-[#EF4444]" : "text-black bg-[#F59E0B]"
+                      t.status === "failed" ? "text-white bg-[#EF4444]" : t.status === "unavailable" ? "text-white bg-[#64748B]" : "text-black bg-[#F59E0B]"
                     }`}>{t.status}</span>
                     <span className="text-[10px] font-mono text-[#94A3B8]">
                       {new Date(t.timestamp).toLocaleTimeString()}
@@ -447,6 +466,25 @@ export default function MissionDetail() {
                       <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-black shadow-[1.5px_1.5px_0px_#000000] ${badgeBg}`}>
                         {f.severity}
                       </span>
+                      {f.model_severity ? (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wide border border-black shadow-[1.5px_1.5px_0px_#000000] bg-[#1E293B] text-[#38BDF8]"
+                          title="Second opinion from the Nuclei-trained TF-IDF + linear SVM severity model"
+                        >
+                          ML: {f.model_severity}
+                        </span>
+                      ) : mission.status === "running" ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-dashed border-[#64748B] text-[#64748B] animate-pulse">
+                          ML pending
+                        </span>
+                      ) : (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border border-black shadow-[1.5px_1.5px_0px_#000000] bg-[#374151] text-[#9CA3AF]"
+                          title="The ML severity model produced no verdict for this finding (unavailable or no prediction)"
+                        >
+                          ML unavailable
+                        </span>
+                      )}
                       <h4 className="text-xs font-bold text-[#F8FAFC]">{f.title}</h4>
                     </div>
                     <div className="flex items-center gap-3">
@@ -472,6 +510,25 @@ export default function MissionDetail() {
                           </div>
                         </div>
                       )}
+
+                      {f.model_severity ? (
+                        <div>
+                          <span className="text-[10px] font-black text-[#38BDF8] uppercase tracking-wider block mb-1">ML Severity Model Verdict</span>
+                          <div className="p-3.5 rounded bg-[#0E1217] border-2 border-black shadow-[2px_2px_0px_#000000] text-[#CBD5E1]">
+                            <p className="leading-relaxed">
+                              The Nuclei-trained TF-IDF + linear SVM rates this finding <strong className="text-[#F8FAFC] uppercase">{f.model_severity}</strong>.
+                              This is a second opinion trained on Nuclei template ratings, not a validated severity for scanner findings.
+                            </p>
+                          </div>
+                        </div>
+                      ) : mission.status !== "running" ? (
+                        <div>
+                          <span className="text-[10px] font-black text-[#9CA3AF] uppercase tracking-wider block mb-1">ML Severity Model Verdict</span>
+                          <div className="p-3.5 rounded bg-[#0E1217] border-2 border-black shadow-[2px_2px_0px_#000000] text-[#94A3B8]">
+                            <p className="leading-relaxed">The ML severity model produced no verdict for this finding (model unavailable or no prediction returned).</p>
+                          </div>
+                        </div>
+                      ) : null}
 
                       {f.recommendation && (
                         <div>

@@ -86,6 +86,7 @@ class ReportAgent:
                 evidence=finding.evidence,
                 description=finding.description,
                 reasoning=finding.reasoning,
+                model_severity=finding.model_severity,
             )
             for finding in sorted_findings
         ]

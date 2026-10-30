@@ -22,6 +22,7 @@ class ReportFinding(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     description: str = ""
     reasoning: str = ""
+    model_severity: Optional[str] = None
 
 
 class SecurityReport(BaseModel):

@@ -114,6 +114,17 @@ def start_scan(payload: ScanRequest, background_tasks: BackgroundTasks, authoriz
     user = get_current_user_from_header(authorization)
     username = user["username"] if user else None
 
+    # Ownership gate: real targets require verified control; demo is confined to the local mock
+    from backend.services.ownership import is_demo_url, is_verified, get_strong_user
+    if not is_demo_url(url):
+        strong, code = get_strong_user(authorization)
+        if not strong:
+            status = 403 if code == "AUTH_WEAK_IDENTITY" else 401
+            raise HTTPException(status_code=status, detail={"code": code, "message": "Sign in with a password account to scan real targets. Ownership verification is required."})
+        allowed, reason = is_verified(url, strong["username"])
+        if not allowed:
+            raise HTTPException(status_code=403, detail={"code": "OWNERSHIP_VERIFICATION_REQUIRED", "message": reason})
+
     # I4: Prevent concurrent scans that collide or overload resources
     conn = get_connection()
     try:
@@ -458,12 +469,23 @@ def get_mission_detail(id: str):
                     "title": f.get("title", ""),
                     "category": f.get("category", ""),
                     "severity": f.get("severity", ""),
+                    "model_severity": f.get("model_severity"),
                     "confidence": f.get("confidence", 0.0),
                     "evidence": f.get("evidence", []),
                     "description": f.get("description", ""),
                     "reasoning": f.get("reasoning") or get_default_reasoning(f.get("category", ""), f.get("description", "")),
                     "recommendation": f.get("recommendation", "") or get_default_recommendation(f.get("category", ""))
                 })
+
+            # Enrich report-stored findings with persisted ML verdicts (report JSON predates the severity merge)
+            try:
+                cursor.execute("SELECT finding_id, model_severity FROM findings WHERE mission_id = ?", (id,))
+                _db_ms = {r["finding_id"]: r["model_severity"] for r in cursor.fetchall()}
+                for _f in findings_list:
+                    if not _f.get("model_severity"):
+                        _f["model_severity"] = _db_ms.get(_f.get("finding_id", ""))
+            except Exception:
+                pass
                 
             sev_order = {"critical": 4, "high": 3, "medium": 2, "low": 1, "informational": 0}
             findings_list.sort(
@@ -583,6 +605,7 @@ def get_mission_detail(id: str):
                 "title": f["title"],
                 "category": f["type"],
                 "severity": f["severity"],
+                "model_severity": f["model_severity"] if "model_severity" in f.keys() else None,
                 "confidence": f["security_confidence"],
                 "evidence": ev,
                 "description": f["description"],

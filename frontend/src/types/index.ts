@@ -43,6 +43,8 @@ export interface Finding {
   title: string;
   category: string;
   severity: "critical" | "high" | "medium" | "low" | "informational";
+  // Second opinion from the Nuclei-trained TF-IDF + linear SVM severity model.
+  model_severity?: string | null;
   confidence: number;
   evidence: string[];
   description: string;

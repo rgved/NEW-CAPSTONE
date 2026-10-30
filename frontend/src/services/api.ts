@@ -15,7 +15,12 @@ async function fetchJson(url: string, options?: RequestInit) {
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || "API request failed");
+    const detail = errData && errData.detail;
+    const msg = typeof detail === "string" ? detail : (detail && detail.message) || "API request failed";
+    const err: any = new Error(msg);
+    if (detail && typeof detail === "object" && detail.code) err.code = detail.code;
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -45,6 +50,22 @@ export const api = {
     me: () => fetchJson(`${API_BASE}/auth/me`),
   },
 
+  ownership: {
+    challenge: (url: string) =>
+      fetchJson(`${API_BASE}/ownership/challenge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      }),
+    verify: (url: string, method: "file" | "dns") =>
+      fetchJson(`${API_BASE}/ownership/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, method }),
+      }),
+    status: (url: string) =>
+      fetchJson(`${API_BASE}/ownership/status?url=${encodeURIComponent(url)}`),
+  },
   getDashboard: () => fetchJson(`${API_BASE}/dashboard`),
   getMissions: () => fetchJson(`${API_BASE}/missions`),
   getMissionDetail: (id: string) => fetchJson(`${API_BASE}/missions/${id}`),

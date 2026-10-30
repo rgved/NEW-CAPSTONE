@@ -261,6 +261,32 @@ def save_finding(finding: Finding, db_path: Optional[str] = None, mission_id: Op
         conn.close()
 
 
+def update_finding_model_severity(
+    finding_id: str,
+    model_severity: str,
+    db_path: Optional[str] = None,
+) -> None:
+    """Store the ML severity model's verdict for a finding.
+
+    Additive only: never overwrites the LLM-assigned ``severity``.
+    """
+    conn = get_connection(db_path)
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE findings SET model_severity = ? WHERE finding_id = ?",
+            (model_severity, finding_id),
+        )
+        conn.commit()
+        logger.info(
+            "Finding model severity stored - finding_id=%s model_severity=%s",
+            finding_id,
+            model_severity,
+        )
+    finally:
+        conn.close()
+
+
 def get_findings(db_path: Optional[str] = None) -> list[Finding]:
     """Retrieve all persisted findings from SQLite."""
     conn = get_connection(db_path)
@@ -269,7 +295,8 @@ def get_findings(db_path: Optional[str] = None) -> list[Finding]:
         cursor.execute(
             """
             SELECT id, finding_id, type, title, feature, severity,
-                   security_confidence, evidence, description, reasoning, route_id
+                   security_confidence, evidence, description, reasoning, route_id,
+                   model_severity
             FROM findings
             ORDER BY id ASC
             """
@@ -286,6 +313,7 @@ def get_findings(db_path: Optional[str] = None) -> list[Finding]:
                 evidence=json.loads(row["evidence"] or "[]"),
                 description=row["description"] or "",
                 reasoning=row["reasoning"] if "reasoning" in row.keys() and row["reasoning"] else "",
+                model_severity=row["model_severity"] if "model_severity" in row.keys() else None,
                 route_id=row["route_id"],
             )
             for row in rows

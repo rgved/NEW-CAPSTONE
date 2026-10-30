@@ -85,10 +85,15 @@
   "title": "string",
   "feature": "string",
   "severity": "low|medium|high|critical",
+  "model_severity": "informational|low|medium|high|critical|null",
   "security_confidence": 0.0,
   "evidence": []
 }
 ```
+
+`model_severity` is an additive extension: the ML severity model's
+(Nuclei-trained TF-IDF + linear SVM) second opinion on the finding. It
+never replaces `severity`, which remains the analysis LLM's assessment.
 
 ## CoverageState
 

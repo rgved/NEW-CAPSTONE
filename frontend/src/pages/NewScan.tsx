@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../services/api";
+import OwnershipModal from "../components/OwnershipModal";
 import type { TimelineTask, MissionDetail } from "../types";
 import {
   Play,
@@ -96,6 +97,7 @@ export default function NewScan() {
   const [url, setUrl] = useState("");
   const [maxPages, setMaxPages] = useState(5);
   const [error, setError] = useState("");
+  const [ownershipBlock, setOwnershipBlock] = useState<{ code: string; message: string; url: string } | null>(null);
   const [scanning, setScanning] = useState(false);
   const [missionId, setMissionId] = useState<string | null>(null);
   const [timeline, setTimeline] = useState<Record<StepKey, "pending" | "running" | "completed" | "failed">>({
@@ -138,7 +140,12 @@ export default function NewScan() {
       setMissionId(res.mission_id);
       if (customUrl) setUrl(customUrl);
     } catch (err: any) {
-      setError(err.message || "Failed to initiate scan");
+      const code = err && err.code;
+      if (code === "OWNERSHIP_VERIFICATION_REQUIRED" || code === "AUTH_WEAK_IDENTITY") {
+        setOwnershipBlock({ code, message: err.message || "Ownership verification required", url: targetUrl });
+      } else {
+        setError(err.message || "Failed to initiate scan");
+      }
       setScanning(false);
       setOverallStatus(null);
     }
@@ -268,6 +275,7 @@ export default function NewScan() {
                 />
               </div>
               {error && <p className="text-xs text-[#EF4444] font-medium mt-1 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5" /> {error}</p>}
+              <button type="button" onClick={() => setUrl("http://localhost:8080")} className="text-xs text-[#3B82F6] underline mt-1">Demo Details</button>
             </div>
 
             {/* Quick Sample Targets */}
@@ -591,6 +599,17 @@ export default function NewScan() {
             </div>
           )}
         </div>
+      )}
+      {ownershipBlock && (
+        <OwnershipModal
+          open={true}
+          code={ownershipBlock.code}
+          message={ownershipBlock.message}
+          targetUrl={ownershipBlock.url}
+          onClose={() => setOwnershipBlock(null)}
+          onUseDemo={() => { setUrl("http://localhost:8080"); setOwnershipBlock(null); }}
+          onVerified={() => { setOwnershipBlock(null); setError(""); }}
+        />
       )}
     </div>
   );

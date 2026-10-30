@@ -36,6 +36,9 @@ class Finding(BaseModel):
     title: str
     feature: str
     severity: FindingSeverity
+    # ML second opinion from the Nuclei-trained TF-IDF + linear SVM.
+    # Additive only: never replaces the LLM-assigned severity above.
+    model_severity: Optional[FindingSeverity] = None
     security_confidence: float = Field(ge=0.0, le=1.0)
     evidence: BoundedEvidenceList = Field(default_factory=list)
     description: str = ""

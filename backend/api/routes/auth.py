@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Header, status
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, timezone
+import os
 import hashlib
 import hmac
 import json
@@ -18,7 +19,20 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-SECRET_KEY = "capstone_recon_secret_key_change_in_prod"
+def _load_secret_key():
+    key = os.environ.get("CRACKAPP_SECRET_KEY", "").strip()
+    if not key:
+        try:
+            from dotenv import dotenv_values
+            key = (dotenv_values().get("CRACKAPP_SECRET_KEY") or "").strip()
+        except Exception:
+            key = ""
+    if not key:
+        raise RuntimeError("CRACKAPP_SECRET_KEY is not configured; refusing to use an insecure default")
+    return key
+
+
+SECRET_KEY = _load_secret_key()
 
 
 # ── Token Helpers ─────────────────────────────────────────────────────────────

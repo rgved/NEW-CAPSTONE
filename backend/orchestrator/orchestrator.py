@@ -25,6 +25,7 @@ from backend.services.risk_scorer import is_same_domain, normalize_url, prioriti
 from backend.services.storage_service import (
     save_feature,
     save_finding,
+    update_finding_model_severity,
     save_route,
     save_report,
     save_task,
@@ -64,6 +65,7 @@ class Orchestrator:
         # Stores the data dict from a successful RUN_EFFICIENT_FETCH WorkerResponse.
         self.last_efficient_fetch_data: dict | None = None
         self.last_analysis_data: dict | None = None
+        self.last_severity_model_data: dict | None = None
 
     def create_mission(self, url: str) -> MissionState:
         self._mission_counter += 1
@@ -99,6 +101,14 @@ class Orchestrator:
                 action="RUN_ANALYSIS",
                 target=mission.target,
                 context=self._build_analysis_context(),
+                priority="high",
+            )
+
+        if not mission.severity_model_completed:
+            return Task(
+                action="RUN_SEVERITY_MODEL",
+                target=mission.target,
+                context={"findings": [f.model_dump() for f in self.last_saved_findings]},
                 priority="high",
             )
 
@@ -209,6 +219,32 @@ class Orchestrator:
                 self.last_saved_findings.append(saved_finding)
                 self._semantic_memory.upsert_finding(saved_finding)
             logger.info("Analysis complete - findings=%d", len(self.last_saved_findings))
+        elif task.action == "RUN_SEVERITY_MODEL":
+            mission.severity_model_completed = True
+            sm_data = response.data if isinstance(response.data, dict) else {}
+            self.last_severity_model_data = sm_data
+            if sm_data.get("model_available"):
+                verdicts = {
+                    v.get("finding_id"): v.get("model_severity")
+                    for v in sm_data.get("scored_findings", [])
+                    if isinstance(v, dict)
+                }
+                updated = 0
+                for idx, finding in enumerate(self.last_saved_findings):
+                    verdict = verdicts.get(finding.finding_id)
+                    if verdict:
+                        self.last_saved_findings[idx] = finding.model_copy(
+                            update={"model_severity": verdict}
+                        )
+                        update_finding_model_severity(
+                            finding.finding_id, verdict, db_path=self._db_path
+                        )
+                        updated += 1
+                logger.info("Severity model complete - scored=%d", updated)
+            else:
+                logger.warning(
+                    "Severity model unavailable - reason=%s", sm_data.get("reason")
+                )
         elif task.action == "GENERATE_REPORT":
             mission.report_generated = True
             report_payload = response.data.get("report")
@@ -239,6 +275,7 @@ class Orchestrator:
         self.last_report = None
         self.last_efficient_fetch_data = None
         self.last_analysis_data = None
+        self.last_severity_model_data = None
         mission = self.create_mission(url)
         save_mission(mission.mission_id, mission.target, status="running", db_path=self._db_path)
         from backend.services.storage_service import current_mission_id
@@ -275,6 +312,10 @@ class Orchestrator:
 
             response = await self._dispatcher.dispatch(saved_task)
             task_status = "completed" if response.status == "success" else "failed"
+            if saved_task.action == "RUN_SEVERITY_MODEL" and response.status == "success":
+                _sm = response.data or {}
+                if not _sm.get("model_available", True) or not _sm.get("scored_findings"):
+                    task_status = "unavailable"
             update_task_status(saved_task.task_id, task_status, db_path=self._db_path)
             mission = self.update_state(mission, saved_task, response)
 

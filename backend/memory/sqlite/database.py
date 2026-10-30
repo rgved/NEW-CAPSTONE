@@ -160,6 +160,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         _ensure_column(cursor, "findings", "evidence", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(cursor, "findings", "description", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(cursor, "findings", "reasoning", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(cursor, "findings", "model_severity", "TEXT")
         _ensure_column(cursor, "findings", "route_id", "INTEGER")
         _ensure_column(cursor, "findings", "mission_id", "TEXT")
         cursor.execute(_CREATE_REPORTS)

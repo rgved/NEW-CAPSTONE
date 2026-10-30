@@ -49,6 +49,7 @@ def get_findings_list(
                             "title": f.get("title", ""),
                             "category": f.get("category", "unknown"),
                             "severity": f.get("severity", "medium").lower(),
+                            "model_severity": f.get("model_severity"),
                             "confidence": f.get("confidence", 0.0),
                             "evidence": f.get("evidence", []),
                             "description": f.get("description", ""),
@@ -66,6 +67,7 @@ def get_findings_list(
             cursor.execute(f"""
                 SELECT f.id, f.finding_id, f.type, f.title, f.feature, f.severity, 
                        f.security_confidence, f.evidence, f.description, f.reasoning, f.route_id, f.mission_id,
+                       f.model_severity,
                        r.url, r.discovered_at
                 FROM findings f
                 LEFT JOIN routes r ON f.route_id = r.id
@@ -76,6 +78,7 @@ def get_findings_list(
             cursor.execute("""
                 SELECT f.id, f.finding_id, f.type, f.title, f.feature, f.severity, 
                        f.security_confidence, f.evidence, f.description, f.reasoning, f.route_id, f.mission_id,
+                       f.model_severity,
                        r.url, r.discovered_at
                 FROM findings f
                 LEFT JOIN routes r ON f.route_id = r.id
@@ -100,6 +103,7 @@ def get_findings_list(
                     "title": row["title"],
                     "category": row["type"],
                     "severity": row["severity"].lower(),
+                    "model_severity": row["model_severity"] if "model_severity" in row.keys() else None,
                     "confidence": row["security_confidence"],
                     "evidence": evidence_list,
                     "description": row["description"],

@@ -18,5 +18,6 @@ class MissionState(BaseModel):
     features_extracted: bool = False
     efficient_fetch_completed: bool = False
     analysis_completed: bool = False
+    severity_model_completed: bool = False
     report_generated: bool = False
     current_task_id: Optional[str] = None

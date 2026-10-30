@@ -294,6 +294,14 @@ export default function Findings() {
                             <span className={`px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000] text-[10px] font-mono font-bold uppercase tracking-wide ${getSeverityStyle(f.severity)}`}>
                               {f.severity}
                             </span>
+                            {f.model_severity && (
+                              <span
+                                className="ml-1.5 px-2 py-0.5 border border-black shadow-[1px_1px_0px_#000] text-[10px] font-mono font-bold uppercase tracking-wide bg-[#1E293B] text-[#38BDF8]"
+                                title="Second opinion from the Nuclei-trained TF-IDF + linear SVM severity model"
+                              >
+                                ML: {f.model_severity}
+                              </span>
+                            )}
                           </td>
                           <td className="p-4 font-mono text-[#94A3B8] whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <Link to={`/mission/${f.mission}`} className="hover:text-[#E2F952] hover:underline inline-flex items-center gap-1">

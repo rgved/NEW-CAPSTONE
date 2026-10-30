@@ -7,6 +7,11 @@ python-dotenv==1.0.1
 openai==1.91.0
 chromadb==0.5.5
 
+# ML severity model (Nuclei TF-IDF + linear SVM artifact)
+# Versions pinned to the ones the pickle was saved with.
+numpy==1.26.4
+scikit-learn==1.7.2
+
 # Testing
 pytest==8.2.2
 pytest-asyncio==0.23.7

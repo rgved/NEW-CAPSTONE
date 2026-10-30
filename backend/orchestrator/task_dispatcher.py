@@ -45,6 +45,7 @@ class TaskDispatcher:
         efficient_fetch_worker: EfficientFetchWorker | None = None,
         analysis_agent: AnalysisAgent | None = None,
         report_agent: ReportAgent | None = None,
+        severity_model_agent=None,
     ) -> None:
         self._recon_agent: ReconAgent = recon_agent or ReconAgent()
 
@@ -58,6 +59,7 @@ class TaskDispatcher:
         self._efficient_fetch_worker: EfficientFetchWorker = efficient_fetch_worker or EfficientFetchWorker()
         self._analysis_agent = analysis_agent
         self._report_agent = report_agent
+        self._severity_model_agent = severity_model_agent
 
     async def dispatch(self, task: Task) -> WorkerResponse:
         if task.task_id is None:
@@ -76,6 +78,9 @@ class TaskDispatcher:
 
         if task.action == "RUN_ANALYSIS":
             return await self._get_analysis_agent().execute(task)
+
+        if task.action == "RUN_SEVERITY_MODEL":
+            return await self._get_severity_model_agent().execute(task)
 
         if task.action == "GENERATE_REPORT":
             return await self._get_report_agent().execute(task)
@@ -102,6 +107,15 @@ class TaskDispatcher:
 
         self._analysis_agent = _AA()
         return self._analysis_agent
+
+    def _get_severity_model_agent(self):
+        if self._severity_model_agent is not None:
+            return self._severity_model_agent
+
+        from backend.agents.severity_model.severity_model_agent import SeverityModelAgent as _SMA
+
+        self._severity_model_agent = _SMA()
+        return self._severity_model_agent
 
     def _get_report_agent(self):
         if self._report_agent is not None:
