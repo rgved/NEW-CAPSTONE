@@ -28,7 +28,6 @@ export default function SecurityMetricsStrip({ variant = "full", className = "" 
   const securityScore = stats.security_score ?? (stats.total_findings === 0 ? 100 : Math.max(30, 100 - stats.total_findings * 12));
   const scoreColor = securityScore >= 80 ? "text-[#10B981]" : securityScore >= 60 ? "text-[#F59E0B]" : "text-[#EF4444]";
   const scoreBadge = securityScore >= 80 ? "Hardened" : securityScore >= 60 ? "Moderate" : "Elevated Risk";
-  const scoreBadgeBg = securityScore >= 80 ? "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30" : securityScore >= 60 ? "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30" : "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30";
 
   if (variant === "compact") {
     return (
