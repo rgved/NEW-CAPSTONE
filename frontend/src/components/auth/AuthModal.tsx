@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../services/api";
-import { X, Lock, Mail, User as UserIcon, AlertCircle, ArrowRight, ShieldCheck, Loader2, ArrowLeft } from "lucide-react";
+import { X, Lock, Mail, User as UserIcon, AlertCircle, ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import GoogleIcon from "./GoogleIcon";
 
@@ -24,10 +24,7 @@ export default function AuthModal() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Google OAuth specific states
-  const [isGooglePromptOpen, setIsGooglePromptOpen] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState("");
-  const [googleName, setGoogleName] = useState("");
+  // Google OAuth state
   const [googleClientId, setGoogleClientId] = useState<string>(
     () => (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || ""
   );
@@ -36,7 +33,6 @@ export default function AuthModal() {
   useEffect(() => {
     setMode(authModalMode);
     setError(null);
-    setIsGooglePromptOpen(false);
   }, [authModalMode, isAuthModalOpen]);
 
   // Fetch configured Google Client ID from backend
@@ -58,49 +54,6 @@ export default function AuthModal() {
   const handleGoogleClick = () => {
     setError(null);
     const effectiveClientId = googleClientId || (import.meta.env.VITE_GOOGLE_CLIENT_ID as string) || "";
-
-    // If real Google Identity Services is available and Client ID is configured, trigger the official Google popup
-    if (effectiveClientId && window.google?.accounts?.oauth2) {
-      try {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: effectiveClientId,
-          scope: "email profile openid",
-          callback: async (tokenResponse: any) => {
-            if (tokenResponse?.access_token) {
-              setLoading(true);
-              try {
-                const userInfo = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-                }).then((r) => r.json());
-
-                if (userInfo?.email) {
-                  const res = await api.auth.googleAuth({
-                    email: userInfo.email,
-                    name: userInfo.name,
-                    google_id: userInfo.sub,
-                    avatar_url: userInfo.picture,
-                  });
-                  if (res && res.token) {
-                    setAuthData(res.token, res.user);
-                    navigate("/dashboard");
-                  }
-                }
-              } catch (err: any) {
-                setError(err?.message || "Google profile authentication failed.");
-              } finally {
-                setLoading(false);
-              }
-            } else if (tokenResponse?.error) {
-              setError(`Google Sign-In error: ${tokenResponse.error}`);
-            }
-          },
-        });
-        client.requestAccessToken();
-        return;
-      } catch (err) {
-        // Fall back to id.prompt or direct input
-      }
-    }
 
     if (window.google?.accounts?.id && googleClientId) {
       try {
@@ -132,36 +85,8 @@ export default function AuthModal() {
       }
     }
 
-    // Direct Google Account Auth
-    setIsGooglePromptOpen(true);
-  };
-
-  const handleGoogleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!googleEmail.trim() || !googleEmail.includes("@")) {
-      setError("Please provide a valid Google account email.");
-      return;
-    }
-
-    setError(null);
-    setLoading(true);
-
-    try {
-      const res = await api.auth.googleAuth({
-        email: googleEmail.trim().toLowerCase(),
-        name: googleName.trim() || undefined,
-        google_id: `g_${Date.now()}`,
-      });
-
-      if (res && res.token) {
-        setAuthData(res.token, res.user);
-        navigate("/dashboard");
-      }
-    } catch (err: any) {
-      setError(err?.message || "Google authentication failed. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    // Google sign-in requires the official GIS credential flow; there is no manual fallback.
+    setError("Google sign-in is unavailable. Please try again or use your password account.");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -237,94 +162,7 @@ export default function AuthModal() {
           <X className="w-5 h-5" />
         </button>
 
-        {isGooglePromptOpen ? (
-          /* Google Account Direct Authentication Screen */
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                setIsGooglePromptOpen(false);
-                setError(null);
-              }}
-              className="flex items-center gap-1.5 text-xs text-[#94A3B8] hover:text-[#E2F952] mb-4 transition cursor-pointer font-mono font-bold"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Back to standard login</span>
-            </button>
-
-            <div className="text-center mb-6">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-[#0D1117] border-2 border-black shadow-[2px_2px_0px_#000] mb-3">
-                <GoogleIcon className="w-6 h-6" />
-              </div>
-              <h2 className="text-xl font-black text-[#F8FAFC]">
-                Sign in with Google
-              </h2>
-              <p className="text-xs text-[#94A3B8] mt-1 font-editorial italic">
-                Enter your Google Account to connect with Sniff Reconnaissance
-              </p>
-            </div>
-
-            {error && (
-              <div className="mb-4 p-3 rounded-lg bg-[#EF4444]/20 border-2 border-black shadow-[2px_2px_0px_#000] flex items-start gap-2.5 text-red-200 text-xs">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
-                <span>{error}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleGoogleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-mono font-bold text-[#94A3B8] mb-1.5">
-                  Google Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-3 w-4 h-4 text-[#64748B]" />
-                  <input
-                    type="email"
-                    required
-                    value={googleEmail}
-                    onChange={(e) => setGoogleEmail(e.target.value)}
-                    placeholder="your.name@gmail.com"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0D1117] border-2 border-black rounded-xl text-sm text-[#F8FAFC] placeholder-[#475569] focus:outline-hidden focus:border-[#E2F952] focus:shadow-[2px_2px_0px_#000] transition"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-mono font-bold text-[#94A3B8] mb-1.5">
-                  Full Name (Optional)
-                </label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3.5 top-3 w-4 h-4 text-[#64748B]" />
-                  <input
-                    type="text"
-                    value={googleName}
-                    onChange={(e) => setGoogleName(e.target.value)}
-                    placeholder="e.g. Alex Hunter"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0D1117] border-2 border-black rounded-xl text-sm text-[#F8FAFC] placeholder-[#475569] focus:outline-hidden focus:border-[#E2F952] focus:shadow-[2px_2px_0px_#000] transition"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full mt-2 py-3 px-4 bg-white hover:bg-[#E2F952] text-black font-black border-2 border-black shadow-[3px_3px_0px_#000] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[4.5px_4.5px_0px_#000] active:translate-x-0.5 active:translate-y-0.5 rounded-xl flex items-center justify-center gap-2.5 text-sm transition cursor-pointer disabled:opacity-50"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-black" />
-                    <span>Connecting Google Account...</span>
-                  </>
-                ) : (
-                  <>
-                    <GoogleIcon className="w-4 h-4" />
-                    <span>Continue with Google</span>
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        ) : (
+        {(
           /* Standard Auth Screen with Google Button */
           <div>
             {/* Header */}
