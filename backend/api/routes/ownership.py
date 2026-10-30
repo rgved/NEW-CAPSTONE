@@ -8,7 +8,7 @@ from backend.services import ownership
 router = APIRouter()
 
 WEAK_IDENTITY_MESSAGE = (
-    "Google sign-in cannot authorize scans yet (identity is self-asserted until Google token verification is fixed). "
+    "This Google sign-in predates server verification. Sign out and sign in with Google again, or use a password account. "
     "Use a password account, or use the demo target."
 )
 
